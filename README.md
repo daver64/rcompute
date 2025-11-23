@@ -11,6 +11,13 @@ A minimal, STB-style single-header library for OpenGL compute shaders.
 - 📝 Load shaders from files or strings
 - ✅ Proper resource cleanup and error handling
 - 🛡️ Comprehensive null pointer safety
+- 🎨 2D and 3D texture support with multiple formats
+- ⚡ Async buffer operations with fence sync
+- 🗺️ Buffer mapping for direct GPU memory access
+- 🔧 Debug mode with verbose logging
+- 🔄 Shader hot-reload capability
+- ⏱️ GPU timing and profiling
+- 🛡️ Buffer bounds checking
 
 ## Quick Start
 
@@ -160,6 +167,12 @@ GLsizeiptr rcompute_buffer_size(GLuint buf);
 Queries the size of an allocated buffer.
 
 ```cpp
+void *rcompute_buffer_map(GLuint buf, GLenum access);
+void rcompute_buffer_unmap(GLuint buf);
+```
+Maps a buffer for direct CPU access. Use `GL_READ_ONLY`, `GL_WRITE_ONLY`, or `GL_READ_WRITE` for the access parameter. Always call `unmap` when done.
+
+```cpp
 void rcompute_buffer_destroy(GLuint buf);
 ```
 Destroys a buffer and frees GPU memory.
@@ -169,12 +182,20 @@ Destroys a buffer and frees GPU memory.
 ```cpp
 GLuint rcompute_texture_2d(int width, int height, GLenum format, const void *data);
 ```
-Creates a 2D texture for compute shader access. Common formats: `GL_RGBA32F`, `GL_R32F`, `GL_RG32F`.
+Creates a 2D texture for compute shader access. Supports formats:
+- Float: `GL_R32F`, `GL_RG32F`, `GL_RGBA32F`
+- Integer: `GL_R32I`, `GL_RG32I`, `GL_RGBA32I`
+- Unsigned: `GL_R32UI`, `GL_RG32UI`, `GL_RGBA32UI`
 
 ```cpp
-void rcompute_texture_bind(GLuint tex, GLuint unit);
+GLuint rcompute_texture_3d(int width, int height, int depth, GLenum format, const void *data);
 ```
-Binds texture to an image unit for compute shader read/write access.
+Creates a 3D texture for compute shader access. Supports the same formats as 2D textures.
+
+```cpp
+void rcompute_texture_bind(GLuint tex, GLuint unit, GLenum format);
+```
+Binds texture to an image unit for compute shader read/write access. The format must match the texture's internal format.
 
 ```cpp
 void rcompute_texture_destroy(GLuint tex);
@@ -233,7 +254,32 @@ Queries OpenGL compute shader limits and capabilities. Pass NULL for parameters 
 ```cpp
 void rcompute_read(GLuint buf, void *out, GLsizeiptr size);
 ```
-Reads data from buffer to CPU memory.
+Reads data from buffer to CPU memory (blocking).
+
+```cpp
+void rcompute_read_async(GLuint buf, void *data, size_t size, size_t offset);
+void rcompute_wait_async(void);
+```
+Async buffer read operations. `read_async` initiates a non-blocking read with a fence sync object. Call `wait_async` to ensure the operation completes before using the data.
+
+### Shader Hot-Reload
+
+```cpp
+int rcompute_reload_shader(rcompute *c, const char *filepath);
+```
+Reloads a shader from file, replacing the current program. Returns 1 on success, 0 on failure. Useful for iterative development.
+
+### Debug & Diagnostics
+
+```cpp
+void rcompute_set_debug(int enable);
+```
+Enables or disables debug logging. When enabled, the library prints detailed information about operations.
+
+```cpp
+int rcompute_check_version(int required_major, int required_minor);
+```
+Checks if the current OpenGL version meets the minimum requirement. Returns 1 if supported, 0 otherwise.
 
 ### Error Handling
 
@@ -345,7 +391,8 @@ The project includes several examples demonstrating different use cases:
 - **`example.cpp`** - Basic usage with file loading
 - **`example_advanced.cpp`** - Buffer management and updates
 - **`example_comprehensive.cpp`** - Advanced algorithms (smoothing, reduction, matrix multiplication)
-- **`example_new_features.cpp`** - New features: uniforms, timing, limits, barriers, shader defines
+- **`example_new_features.cpp`** - Features: uniforms, timing, limits, barriers, shader defines
+- **`example_advanced_features.cpp`** - Advanced features: buffer mapping, async reads, shader hot-reload, debug mode, bounds checking
 
 ### Example Shaders
 
