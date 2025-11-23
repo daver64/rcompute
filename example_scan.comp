@@ -19,12 +19,12 @@ void main() {
     
     // Load data into shared memory
     int offset = 1;
-    if (gid * 2 < n)
+    if (int(gid * 2) < n)
         temp[tid * 2] = input_data[gid * 2];
     else
         temp[tid * 2] = 0;
         
-    if (gid * 2 + 1 < n)
+    if (int(gid * 2 + 1) < n)
         temp[tid * 2 + 1] = input_data[gid * 2 + 1];
     else
         temp[tid * 2 + 1] = 0;
@@ -34,9 +34,9 @@ void main() {
         barrier();
         memoryBarrierShared();
         
-        if (tid < d) {
-            int ai = offset * (2 * tid + 1) - 1;
-            int bi = offset * (2 * tid + 2) - 1;
+        if (int(tid) < d) {
+            int ai = offset * (2 * int(tid) + 1) - 1;
+            int bi = offset * (2 * int(tid) + 2) - 1;
             temp[bi] += temp[ai];
         }
         offset *= 2;
@@ -52,9 +52,9 @@ void main() {
         barrier();
         memoryBarrierShared();
         
-        if (tid < d) {
-            int ai = offset * (2 * tid + 1) - 1;
-            int bi = offset * (2 * tid + 2) - 1;
+        if (int(tid) < d) {
+            int ai = offset * (2 * int(tid) + 1) - 1;
+            int bi = offset * (2 * int(tid) + 2) - 1;
             
             int t = temp[ai];
             temp[ai] = temp[bi];
@@ -66,8 +66,8 @@ void main() {
     memoryBarrierShared();
     
     // Write results
-    if (gid * 2 < n)
+    if (int(gid * 2) < n)
         output_data[gid * 2] = temp[tid * 2];
-    if (gid * 2 + 1 < n)
+    if (int(gid * 2 + 1) < n)
         output_data[gid * 2 + 1] = temp[tid * 2 + 1];
 }
