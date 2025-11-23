@@ -1,6 +1,6 @@
 # rcompute
 
-A minimal, STB-style single-header library for OpenGL compute shaders.
+A lightweight, STB-style single-header library for OpenGL compute shaders. Write GPU-accelerated compute programs with minimal boilerplate—just drop in the header and start dispatching work to the GPU.
 
 ## Features
 
