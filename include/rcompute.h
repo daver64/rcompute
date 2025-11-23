@@ -28,6 +28,7 @@ extern "C"
     {
         GLFWwindow *window;
         GLuint program;
+        GLuint last_program; // Cache for optimization
     } rcompute;
 
     // create OpenGL context + window (hidden)
@@ -41,6 +42,9 @@ extern "C"
 
     // compile a compute shader with preprocessor defines
     GLuint rcompute_compile_with_defines(const char *src, const char **defines, int count);
+
+    // reload shader from file (hot-reload support)
+    int rcompute_reload_shader(rcompute *c, const char *filepath);
 
     // set active program for compute context
     void rcompute_set_program(rcompute *c, GLuint program);
@@ -72,12 +76,21 @@ extern "C"
     // query buffer size
     GLsizeiptr rcompute_buffer_size(GLuint buf);
 
+    // map buffer for direct access
+    void *rcompute_buffer_map(GLuint buf, GLenum access);
+    void rcompute_buffer_unmap(GLuint buf);
+
+    // async buffer operations
+    void rcompute_read_async(GLuint buf, void *data, size_t size, size_t offset);
+    void rcompute_wait_async();
+
     // destroy a buffer
     void rcompute_buffer_destroy(GLuint buf);
 
     // Texture operations
     GLuint rcompute_texture_2d(int width, int height, GLenum format, const void *data);
-    void rcompute_texture_bind(GLuint tex, GLuint unit);
+    GLuint rcompute_texture_3d(int width, int height, int depth, GLenum format, const void *data);
+    void rcompute_texture_bind(GLuint tex, GLuint unit, GLenum format);
     void rcompute_texture_destroy(GLuint tex);
 
     // run the compute shader: dispatch nx,ny,nz
@@ -92,6 +105,10 @@ extern "C"
     // read back from SSBO
     void rcompute_read(GLuint buf, void *out, GLsizeiptr size);
 
+    // buffer mapping for large transfers
+    void *rcompute_buffer_map(GLuint buf, GLenum access);
+    void rcompute_buffer_unmap(GLuint buf);
+
     // Memory barriers
     void rcompute_barrier(GLenum barriers);
     void rcompute_barrier_all(void);
@@ -99,6 +116,7 @@ extern "C"
     // GPU timing/profiling
     void rcompute_timer_begin(void);
     double rcompute_timer_end(void); // returns milliseconds
+    void rcompute_timer_destroy(void);
 
     // Query compute limits
     void rcompute_get_limits(rcompute *c, int *max_work_group_count_x,
@@ -112,6 +130,12 @@ extern "C"
     // get last error message (returns NULL if no error)
     const char *rcompute_get_last_error(void);
 
+    // check if OpenGL version is supported
+    int rcompute_check_version(int required_major, int required_minor);
+
+    // enable/disable debug logging
+    void rcompute_set_debug(int enable);
+
 #ifdef __cplusplus
 }
 #endif
@@ -124,6 +148,7 @@ extern "C"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 // Global error state
 static char rcompute__last_error[512] = {0};
@@ -132,6 +157,13 @@ static int rcompute__glfw_initialized = 0;
 // GPU timing state
 static GLuint rcompute__query_id = 0;
 static int rcompute__query_available = 0;
+
+// Async read state
+static GLsync rcompute__sync = NULL;
+
+// Debug mode
+static int rcompute__debug = 0;
+static GLsync rcompute__async_sync = NULL;
 
 // error printing and tracking
 static void rcompute__err(const char *txt)
@@ -148,6 +180,42 @@ static void rcompute__err_ex(const char *fmt, const char *arg)
     fprintf(stderr, "\n");
 }
 
+static void rcompute__debug_log(const char *fmt, ...)
+{
+    if (!rcompute__debug) return;
+    va_list args;
+    va_start(args, fmt);
+    fprintf(stdout, "[rcompute] ");
+    vfprintf(stdout, fmt, args);
+    fprintf(stdout, "\n");
+    va_end(args);
+}
+
+// ---------------------------------
+// Debug mode
+// ---------------------------------
+void rcompute_set_debug(int enable)
+{
+    rcompute__debug = enable;
+    rcompute__debug_log("Debug mode %s", enable ? "enabled" : "disabled");
+}
+
+// ---------------------------------
+// Version check
+// ---------------------------------
+int rcompute_check_version(int required_major, int required_minor)
+{
+    const GLubyte *version = glGetString(GL_VERSION);
+    if (!version) return 0;
+    
+    int major = 0, minor = 0;
+    sscanf((const char *)version, "%d.%d", &major, &minor);
+    
+    if (major > required_major) return 1;
+    if (major == required_major && minor >= required_minor) return 1;
+    return 0;
+}
+
 // ---------------------------------
 // create invisible 1×1 GLFW window
 // ---------------------------------
@@ -155,6 +223,11 @@ int rcompute_init(rcompute *c, int gl_major, int gl_minor)
 {
     if (!c)
         return 0;
+
+    // Initialize to safe state
+    c->window = NULL;
+    c->program = 0;
+    c->last_program = 0;
 
     if (!rcompute__glfw_initialized)
     {
@@ -179,6 +252,7 @@ int rcompute_init(rcompute *c, int gl_major, int gl_minor)
     if (glewInit() != GLEW_OK)
         return 0;
 
+    rcompute__debug_log("Initialized OpenGL %d.%d context", gl_major, gl_minor);
     return 1;
 }
 
@@ -312,7 +386,10 @@ void rcompute_set_program(rcompute *c, GLuint program)
 void rcompute_set_uniform_int(rcompute *c, const char *name, int value)
 {
     if (!c || !name) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniform1i(loc, value);
 }
@@ -320,7 +397,10 @@ void rcompute_set_uniform_int(rcompute *c, const char *name, int value)
 void rcompute_set_uniform_uint(rcompute *c, const char *name, unsigned int value)
 {
     if (!c || !name) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniform1ui(loc, value);
 }
@@ -328,7 +408,10 @@ void rcompute_set_uniform_uint(rcompute *c, const char *name, unsigned int value
 void rcompute_set_uniform_float(rcompute *c, const char *name, float value)
 {
     if (!c || !name) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniform1f(loc, value);
 }
@@ -336,7 +419,10 @@ void rcompute_set_uniform_float(rcompute *c, const char *name, float value)
 void rcompute_set_uniform_vec2(rcompute *c, const char *name, float x, float y)
 {
     if (!c || !name) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniform2f(loc, x, y);
 }
@@ -344,7 +430,10 @@ void rcompute_set_uniform_vec2(rcompute *c, const char *name, float x, float y)
 void rcompute_set_uniform_vec3(rcompute *c, const char *name, float x, float y, float z)
 {
     if (!c || !name) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniform3f(loc, x, y, z);
 }
@@ -352,7 +441,10 @@ void rcompute_set_uniform_vec3(rcompute *c, const char *name, float x, float y, 
 void rcompute_set_uniform_vec4(rcompute *c, const char *name, float x, float y, float z, float w)
 {
     if (!c || !name) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniform4f(loc, x, y, z, w);
 }
@@ -360,7 +452,10 @@ void rcompute_set_uniform_vec4(rcompute *c, const char *name, float x, float y, 
 void rcompute_set_uniform_mat4(rcompute *c, const char *name, const float *matrix)
 {
     if (!c || !name || !matrix) return;
-    glUseProgram(c->program);
+    if (c->last_program != c->program) {
+        glUseProgram(c->program);
+        c->last_program = c->program;
+    }
     GLint loc = glGetUniformLocation(c->program, name);
     if (loc != -1) glUniformMatrix4fv(loc, 1, GL_FALSE, matrix);
 }
@@ -410,6 +505,37 @@ GLuint rcompute_compile_file(const char *filepath)
     free(src);
 
     return prog;
+}
+
+// ---------------------------------
+// Hot-reload shader from file
+// ---------------------------------
+int rcompute_reload_shader(rcompute *c, const char *filepath)
+{
+    if (!c || !filepath)
+    {
+        rcompute__err("Invalid parameters for reload");
+        return 0;
+    }
+
+    GLuint old_program = c->program;
+    GLuint new_program = rcompute_compile_file(filepath);
+    
+    if (!new_program)
+    {
+        rcompute__err("Failed to reload shader");
+        return 0;
+    }
+
+    // Delete old program and use new one
+    if (old_program != 0)
+        glDeleteProgram(old_program);
+    
+    c->program = new_program;
+    c->last_program = 0; // Reset cache
+    
+    rcompute__debug_log("Shader reloaded: %s", filepath);
+    return 1;
 }
 
 // ---------------------------------
@@ -465,9 +591,63 @@ void rcompute_buffer_write(GLuint buf, GLsizeiptr offset, GLsizeiptr size, const
         return;
     }
 
+    // Bounds checking
+    GLsizeiptr buf_size = rcompute_buffer_size(buf);
+    if (offset + size > buf_size)
+    {
+        rcompute__err("Buffer write exceeds buffer bounds");
+        return;
+    }
+
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buf);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    
+    rcompute__debug_log("Buffer write: %lld bytes at offset %lld", (long long)size, (long long)offset);
+}
+
+// ---------------------------------
+// Async buffer operations
+// ---------------------------------
+void rcompute_read_async(GLuint buf, void *data, size_t size, size_t offset)
+{
+    if (buf == 0)
+    {
+        rcompute__err("Invalid buffer handle");
+        return;
+    }
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buf);
+    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
+    
+    // Create or reuse sync object
+    if (rcompute__async_sync)
+        glDeleteSync(rcompute__async_sync);
+    
+    rcompute__async_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    
+    rcompute__debug_log("Async read initiated: %lld bytes at offset %lld", (long long)size, (long long)offset);
+}
+
+void rcompute_wait_async()
+{
+    if (!rcompute__async_sync)
+    {
+        rcompute__debug_log("No async operation to wait for");
+        return;
+    }
+
+    GLenum result = glClientWaitSync(rcompute__async_sync, 0x00000001, 1000000000); // GL_SYNC_FLUSH_BIT, 1 second timeout
+    if (result == GL_TIMEOUT_EXPIRED)
+        rcompute__err("Async operation timeout");
+    else if (result == GL_WAIT_FAILED)
+        rcompute__err("Async wait failed");
+    
+    glDeleteSync(rcompute__async_sync);
+    rcompute__async_sync = NULL;
+    
+    rcompute__debug_log("Async operation completed");
 }
 
 // ---------------------------------
@@ -505,6 +685,45 @@ GLsizeiptr rcompute_buffer_size(GLuint buf)
 }
 
 // ---------------------------------
+// Buffer mapping for large transfers
+// ---------------------------------
+void *rcompute_buffer_map(GLuint buf, GLenum access)
+{
+    if (buf == 0)
+    {
+        rcompute__err("Invalid buffer handle");
+        return NULL;
+    }
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buf);
+    void *ptr = glMapBuffer(GL_SHADER_STORAGE_BUFFER, access);
+    if (!ptr)
+    {
+        rcompute__err("Failed to map buffer");
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        return NULL;
+    }
+    
+    rcompute__debug_log("Buffer mapped");
+    return ptr;
+}
+
+void rcompute_buffer_unmap(GLuint buf)
+{
+    if (buf == 0)
+    {
+        rcompute__err("Invalid buffer handle");
+        return;
+    }
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buf);
+    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    
+    rcompute__debug_log("Buffer unmapped");
+}
+
+// ---------------------------------
 // Texture operations
 // ---------------------------------
 GLuint rcompute_texture_2d(int width, int height, GLenum format, const void *data)
@@ -537,21 +756,90 @@ GLuint rcompute_texture_2d(int width, int height, GLenum format, const void *dat
         else if (format == GL_RG32F) base_format = GL_RG;
         else base_format = GL_RGBA;
     }
+    else if (format == GL_R32I || format == GL_RG32I || format == GL_RGBA32I)
+    {
+        type = GL_INT;
+        if (format == GL_R32I) base_format = GL_RED_INTEGER;
+        else if (format == GL_RG32I) base_format = GL_RG_INTEGER;
+        else base_format = GL_RGBA_INTEGER;
+    }
+    else if (format == GL_R32UI || format == GL_RG32UI || format == GL_RGBA32UI)
+    {
+        type = GL_UNSIGNED_INT;
+        if (format == GL_R32UI) base_format = GL_RED_INTEGER;
+        else if (format == GL_RG32UI) base_format = GL_RG_INTEGER;
+        else base_format = GL_RGBA_INTEGER;
+    }
 
     glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, base_format, type, data);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    rcompute__debug_log("2D texture created: %dx%d format=%d", width, height, format);
     return tex;
 }
 
-void rcompute_texture_bind(GLuint tex, GLuint unit)
+GLuint rcompute_texture_3d(int width, int height, int depth, GLenum format, const void *data)
+{
+    if (width <= 0 || height <= 0 || depth <= 0)
+    {
+        rcompute__err("Invalid texture dimensions");
+        return 0;
+    }
+
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_3D, tex);
+
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    // Determine internal format and type
+    GLenum internal_format = format;
+    GLenum type = GL_UNSIGNED_BYTE;
+    GLenum base_format = format;
+
+    if (format == GL_R32F || format == GL_RG32F || format == GL_RGBA32F)
+    {
+        type = GL_FLOAT;
+        if (format == GL_R32F) base_format = GL_RED;
+        else if (format == GL_RG32F) base_format = GL_RG;
+        else base_format = GL_RGBA;
+    }
+    else if (format == GL_R32I || format == GL_RG32I || format == GL_RGBA32I)
+    {
+        type = GL_INT;
+        if (format == GL_R32I) base_format = GL_RED_INTEGER;
+        else if (format == GL_RG32I) base_format = GL_RG_INTEGER;
+        else base_format = GL_RGBA_INTEGER;
+    }
+    else if (format == GL_R32UI || format == GL_RG32UI || format == GL_RGBA32UI)
+    {
+        type = GL_UNSIGNED_INT;
+        if (format == GL_R32UI) base_format = GL_RED_INTEGER;
+        else if (format == GL_RG32UI) base_format = GL_RG_INTEGER;
+        else base_format = GL_RGBA_INTEGER;
+    }
+
+    glTexImage3D(GL_TEXTURE_3D, 0, internal_format, width, height, depth, 0, base_format, type, data);
+    glBindTexture(GL_TEXTURE_3D, 0);
+
+    rcompute__debug_log("3D texture created: %dx%dx%d format=%d", width, height, depth, format);
+    return tex;
+}
+
+void rcompute_texture_bind(GLuint tex, GLuint unit, GLenum format)
 {
     if (tex == 0)
     {
         rcompute__err("Invalid texture handle");
         return;
     }
-    glBindImageTexture(unit, tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+    glBindImageTexture(unit, tex, 0, GL_FALSE, 0, GL_READ_WRITE, format);
+    rcompute__debug_log("Texture bound to unit %u with format %d", unit, format);
 }
 
 void rcompute_texture_destroy(GLuint tex)

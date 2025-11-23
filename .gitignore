@@ -1,3 +1,37 @@
+# Compiled binaries
 example
-example*
+example_advanced
+example_comprehensive
+example_new_features
 test_limits
+
+# Build directories
+build/
+cmake-build-*/
+*.dSYM/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CPackConfig.cmake
+CPackSourceConfig.cmake
+*.cmake
+!CMakeLists.txt
+
+# Make
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
