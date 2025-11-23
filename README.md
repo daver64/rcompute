@@ -33,6 +33,54 @@ A lightweight, STB-style single-header library for OpenGL compute shaders. Write
 
 3. Link with: `-lGLEW -lGL -lglfw`
 
+## Examples
+
+The project includes extensive examples demonstrating different use cases:
+
+### Getting Started
+
+| Example | Description | Source |
+|---------|-------------|--------|
+| **example** | Basic usage with file loading | [`example.cpp`](example.cpp) |
+| **example_advanced** | Buffer management and updates | [`example_advanced.cpp`](example_advanced.cpp) |
+| **example_new_features** | Uniforms, timing, limits, barriers, shader defines | [`example_new_features.cpp`](example_new_features.cpp) |
+| **example_advanced_features** | Buffer mapping, async reads, shader hot-reload, debug mode | [`example_advanced_features.cpp`](example_advanced_features.cpp) |
+
+### Image Processing
+
+| Example | Description | Source | Shader |
+|---------|-------------|--------|--------|
+| **example_texture** | 2D texture processing with edge detection filter | [`example_texture.cpp`](example_texture.cpp) | [`example_texture.comp`](example_texture.comp) |
+| **example_blur** | Separable Gaussian blur filter (two-pass) | [`example_blur.cpp`](example_blur.cpp) | [`example_blur.comp`](example_blur.comp) |
+| **example_histogram** | Image histogram using atomic operations | [`example_histogram.cpp`](example_histogram.cpp) | [`example_histogram.comp`](example_histogram.comp) |
+
+### Mathematical Visualization
+
+| Example | Description | Source | Shader |
+|---------|-------------|--------|--------|
+| **example_mandelbrot** | Mandelbrot fractal generation with zoom levels | [`example_mandelbrot.cpp`](example_mandelbrot.cpp) | [`example_mandelbrot.comp`](example_mandelbrot.comp) |
+| **example_raytracer** | Simple raytracer with animated spheres and plane | [`example_raytracer.cpp`](example_raytracer.cpp) | [`example_raytracer.comp`](example_raytracer.comp) |
+
+### Physics & Simulation
+
+| Example | Description | Source | Shader |
+|---------|-------------|--------|--------|
+| **example_nbody** | N-body gravitational particle simulation | [`example_nbody.cpp`](example_nbody.cpp) | [`example_nbody.comp`](example_nbody.comp) |
+| **example_comprehensive** | Algorithms: smoothing, reduction, matrix multiplication | [`example_comprehensive.cpp`](example_comprehensive.cpp) | Multiple shaders |
+
+### Computational Algorithms
+
+| Example | Description | Source | Shader |
+|---------|-------------|--------|--------|
+| **example_scan** | Parallel prefix sum using shared memory | [`example_scan.cpp`](example_scan.cpp) | [`example_scan.comp`](example_scan.comp) |
+| **example_monte_carlo** | Monte Carlo π estimation with 65M samples | [`example_monte_carlo.cpp`](example_monte_carlo.cpp) | [`example_monte_carlo.comp`](example_monte_carlo.comp) |
+
+**Compile any example:**
+```bash
+g++ -o example_name example_name.cpp -lGLEW -lGL -lglfw
+./example_name
+```
+
 ### Basic Example
 
 ```cpp
@@ -383,54 +431,6 @@ rcompute_destroy(&c2);
 MIT License - see [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2025 David Rowbotham
-
-## Examples
-
-The project includes extensive examples demonstrating different use cases:
-
-### Getting Started
-
-| Example | Description | Source |
-|---------|-------------|--------|
-| **example** | Basic usage with file loading | [`example.cpp`](example.cpp) |
-| **example_advanced** | Buffer management and updates | [`example_advanced.cpp`](example_advanced.cpp) |
-| **example_new_features** | Uniforms, timing, limits, barriers, shader defines | [`example_new_features.cpp`](example_new_features.cpp) |
-| **example_advanced_features** | Buffer mapping, async reads, shader hot-reload, debug mode | [`example_advanced_features.cpp`](example_advanced_features.cpp) |
-
-### Image Processing
-
-| Example | Description | Source | Shader |
-|---------|-------------|--------|--------|
-| **example_texture** | 2D texture processing with edge detection filter | [`example_texture.cpp`](example_texture.cpp) | [`example_texture.comp`](example_texture.comp) |
-| **example_blur** | Separable Gaussian blur filter (two-pass) | [`example_blur.cpp`](example_blur.cpp) | [`example_blur.comp`](example_blur.comp) |
-| **example_histogram** | Image histogram using atomic operations | [`example_histogram.cpp`](example_histogram.cpp) | [`example_histogram.comp`](example_histogram.comp) |
-
-### Mathematical Visualization
-
-| Example | Description | Source | Shader |
-|---------|-------------|--------|--------|
-| **example_mandelbrot** | Mandelbrot fractal generation with zoom levels | [`example_mandelbrot.cpp`](example_mandelbrot.cpp) | [`example_mandelbrot.comp`](example_mandelbrot.comp) |
-| **example_raytracer** | Simple raytracer with animated spheres and plane | [`example_raytracer.cpp`](example_raytracer.cpp) | [`example_raytracer.comp`](example_raytracer.comp) |
-
-### Physics & Simulation
-
-| Example | Description | Source | Shader |
-|---------|-------------|--------|--------|
-| **example_nbody** | N-body gravitational particle simulation | [`example_nbody.cpp`](example_nbody.cpp) | [`example_nbody.comp`](example_nbody.comp) |
-| **example_comprehensive** | Algorithms: smoothing, reduction, matrix multiplication | [`example_comprehensive.cpp`](example_comprehensive.cpp) | Multiple shaders |
-
-### Computational Algorithms
-
-| Example | Description | Source | Shader |
-|---------|-------------|--------|--------|
-| **example_scan** | Parallel prefix sum using shared memory | [`example_scan.cpp`](example_scan.cpp) | [`example_scan.comp`](example_scan.comp) |
-| **example_monte_carlo** | Monte Carlo π estimation with 65M samples | [`example_monte_carlo.cpp`](example_monte_carlo.cpp) | [`example_monte_carlo.comp`](example_monte_carlo.comp) |
-
-**Compile any example:**
-```bash
-g++ -o example_name example_name.cpp -lGLEW -lGL -lglfw
-./example_name
-```
 
 ### Example Shaders
 
