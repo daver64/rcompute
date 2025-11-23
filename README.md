@@ -102,9 +102,27 @@ GLuint rcompute_compile_file(const char *filepath);
 Loads and compiles a compute shader from a file (`.comp` or `.glsl`). Returns program handle or 0 on error.
 
 ```cpp
+GLuint rcompute_compile_with_defines(const char *src, const char **defines, int count);
+```
+Compiles a shader with preprocessor defines. Inserts `#define` statements after the `#version` line.
+
+```cpp
 void rcompute_set_program(rcompute *c, GLuint program);
 ```
 Sets the active program for the compute context.
+
+### Uniform Helpers
+
+```cpp
+void rcompute_set_uniform_int(rcompute *c, const char *name, int value);
+void rcompute_set_uniform_uint(rcompute *c, const char *name, unsigned int value);
+void rcompute_set_uniform_float(rcompute *c, const char *name, float value);
+void rcompute_set_uniform_vec2(rcompute *c, const char *name, float x, float y);
+void rcompute_set_uniform_vec3(rcompute *c, const char *name, float x, float y, float z);
+void rcompute_set_uniform_vec4(rcompute *c, const char *name, float x, float y, float z, float w);
+void rcompute_set_uniform_mat4(rcompute *c, const char *name, const float *matrix);
+```
+Convenience functions to set shader uniforms without manual `glGetUniformLocation` calls.
 
 ### Buffer Management
 
@@ -122,6 +140,11 @@ Creates a buffer with specific usage hint:
 - `RCOMPUTE_STREAM` - Data changes every frame
 
 ```cpp
+GLuint rcompute_buffer_zero(GLsizeiptr size);
+```
+Creates a zero-initialized buffer (equivalent to passing NULL as data).
+
+```cpp
 void rcompute_buffer_bind(GLuint buf, GLuint binding);
 ```
 Binds a buffer to a shader storage binding point.
@@ -132,9 +155,31 @@ void rcompute_buffer_write(GLuint buf, GLsizeiptr offset, GLsizeiptr size, const
 Updates existing buffer data at the specified offset.
 
 ```cpp
+GLsizeiptr rcompute_buffer_size(GLuint buf);
+```
+Queries the size of an allocated buffer.
+
+```cpp
 void rcompute_buffer_destroy(GLuint buf);
 ```
 Destroys a buffer and frees GPU memory.
+
+### Texture Support
+
+```cpp
+GLuint rcompute_texture_2d(int width, int height, GLenum format, const void *data);
+```
+Creates a 2D texture for compute shader access. Common formats: `GL_RGBA32F`, `GL_R32F`, `GL_RG32F`.
+
+```cpp
+void rcompute_texture_bind(GLuint tex, GLuint unit);
+```
+Binds texture to an image unit for compute shader read/write access.
+
+```cpp
+void rcompute_texture_destroy(GLuint tex);
+```
+Destroys a texture.
 
 ### Execution
 
@@ -147,6 +192,41 @@ Dispatches compute shader with work groups (nx, ny, nz).
 void rcompute_dispatch_1d(rcompute *c, int nx);
 ```
 Convenience function for 1D dispatch (equivalent to `rcompute_run(c, nx, 1, 1)`).
+
+```cpp
+void rcompute_dispatch_2d(rcompute *c, int nx, int ny);
+```
+Convenience function for 2D dispatch (equivalent to `rcompute_run(c, nx, ny, 1)`).
+
+### Memory Barriers
+
+```cpp
+void rcompute_barrier(GLenum barriers);
+```
+Executes a custom memory barrier. Use GL barrier bit flags like `GL_SHADER_STORAGE_BARRIER_BIT`.
+
+```cpp
+void rcompute_barrier_all(void);
+```
+Executes all memory barriers (`GL_ALL_BARRIER_BITS`).
+
+### Performance Profiling
+
+```cpp
+void rcompute_timer_begin(void);
+double rcompute_timer_end(void);
+```
+GPU timing queries. `timer_end()` returns elapsed time in milliseconds.
+
+### Capability Queries
+
+```cpp
+void rcompute_get_limits(rcompute *c, int *max_work_group_count_x,
+                         int *max_work_group_count_y, int *max_work_group_count_z,
+                         int *max_work_group_size_x, int *max_work_group_size_y,
+                         int *max_work_group_size_z, int *max_invocations);
+```
+Queries OpenGL compute shader limits and capabilities. Pass NULL for parameters you don't need.
 
 ### Data Transfer
 
@@ -264,10 +344,8 @@ The project includes several examples demonstrating different use cases:
 
 - **`example.cpp`** - Basic usage with file loading
 - **`example_advanced.cpp`** - Buffer management and updates
-- **`example_comprehensive.cpp`** - Advanced algorithms:
-  - 1D smoothing filter (multi-buffer operations)
-  - Parallel reduction with shared memory
-  - Matrix multiplication with 2D work groups
+- **`example_comprehensive.cpp`** - Advanced algorithms (smoothing, reduction, matrix multiplication)
+- **`example_new_features.cpp`** - New features: uniforms, timing, limits, barriers, shader defines
 
 ### Example Shaders
 
