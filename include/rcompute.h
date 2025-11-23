@@ -1,5 +1,5 @@
 // rcompute.h - Minimal STB-style compute shader wrapper
-// public domain / unlicense
+// MIT License - see LICENSE file
 #ifndef RCOMPUTE_H
 #define RCOMPUTE_H
 

@@ -254,7 +254,9 @@ rcompute_destroy(&c2);
 
 ## License
 
-Public domain / Unlicense
+MIT License - see [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 David Rowbotham
 
 ## Examples
 
