@@ -5,6 +5,13 @@ example_comprehensive
 example_new_features
 example_advanced_features
 example_texture
+example_mandelbrot
+example_nbody
+example_blur
+example_raytracer
+example_scan
+example_histogram
+example_monte_carlo
 test_limits
 
 # Generated output files

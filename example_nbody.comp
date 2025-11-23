@@ -1,0 +1,51 @@
+#version 430
+layout(local_size_x = 256) in;
+
+struct Particle {
+    vec4 pos;  // xyz = position, w = mass
+    vec4 vel;  // xyz = velocity, w = unused
+};
+
+layout(std430, binding = 0) buffer Particles {
+    Particle particles[];
+};
+
+uniform float dt;
+uniform float softening;
+uniform int numBodies;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= numBodies)
+        return;
+    
+    vec3 pos = particles[i].pos.xyz;
+    vec3 vel = particles[i].vel.xyz;
+    float mass = particles[i].pos.w;
+    vec3 force = vec3(0.0);
+    
+    // Calculate gravitational forces from all other particles
+    for (int j = 0; j < numBodies; j++) {
+        if (i == j) continue;
+        
+        vec3 other_pos = particles[j].pos.xyz;
+        float other_mass = particles[j].pos.w;
+        
+        vec3 r = other_pos - pos;
+        float dist = length(r) + softening;
+        float f = other_mass / (dist * dist * dist);
+        
+        force += r * f;
+    }
+    
+    // Update velocity and position
+    vel += force * dt;
+    pos += vel * dt;
+    
+    // Simple boundary conditions - wrap around
+    pos = mod(pos + 1.0, 2.0) - 1.0;
+    
+    // Write back
+    particles[i].pos.xyz = pos;
+    particles[i].vel.xyz = vel;
+}

@@ -1,0 +1,116 @@
+#version 430
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0, rgba32f) uniform writeonly image2D outputImage;
+
+uniform vec3 camPos;
+uniform float time;
+
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+struct Sphere {
+    vec3 center;
+    float radius;
+    vec3 color;
+};
+
+struct Plane {
+    vec3 point;
+    vec3 normal;
+    vec3 color;
+};
+
+float intersectSphere(Ray ray, Sphere sphere) {
+    vec3 oc = ray.origin - sphere.center;
+    float b = dot(oc, ray.direction);
+    float c = dot(oc, oc) - sphere.radius * sphere.radius;
+    float discriminant = b * b - c;
+    
+    if (discriminant < 0.0)
+        return -1.0;
+    
+    return -b - sqrt(discriminant);
+}
+
+float intersectPlane(Ray ray, Plane plane) {
+    float denom = dot(ray.direction, plane.normal);
+    if (abs(denom) < 0.0001)
+        return -1.0;
+    
+    float t = dot(plane.point - ray.origin, plane.normal) / denom;
+    return t > 0.0 ? t : -1.0;
+}
+
+vec3 trace(Ray ray) {
+    // Define scene
+    Sphere spheres[4];
+    spheres[0] = Sphere(vec3(sin(time) * 2.0, 0.0, -5.0), 1.0, vec3(1.0, 0.3, 0.3));
+    spheres[1] = Sphere(vec3(-2.0, cos(time) * 0.5, -6.0), 0.8, vec3(0.3, 1.0, 0.3));
+    spheres[2] = Sphere(vec3(2.0, sin(time * 1.3) * 0.5, -6.0), 0.7, vec3(0.3, 0.3, 1.0));
+    spheres[3] = Sphere(vec3(0.0, 2.0 + sin(time * 2.0) * 0.3, -7.0), 0.6, vec3(1.0, 1.0, 0.3));
+    
+    Plane ground = Plane(vec3(0.0, -1.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.5, 0.5, 0.5));
+    
+    vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
+    
+    // Find closest intersection
+    float closest = 1e10;
+    vec3 color = vec3(0.1, 0.1, 0.15); // Background
+    vec3 normal = vec3(0.0);
+    vec3 hitPos = vec3(0.0);
+    
+    // Check spheres
+    for (int i = 0; i < 4; i++) {
+        float t = intersectSphere(ray, spheres[i]);
+        if (t > 0.0 && t < closest) {
+            closest = t;
+            hitPos = ray.origin + ray.direction * t;
+            normal = normalize(hitPos - spheres[i].center);
+            color = spheres[i].color;
+        }
+    }
+    
+    // Check ground plane
+    float t = intersectPlane(ray, ground);
+    if (t > 0.0 && t < closest) {
+        closest = t;
+        hitPos = ray.origin + ray.direction * t;
+        normal = ground.normal;
+        
+        // Checkerboard pattern
+        vec3 p = hitPos;
+        float checker = mod(floor(p.x) + floor(p.z), 2.0);
+        color = mix(vec3(0.3), vec3(0.7), checker);
+    }
+    
+    // Lighting
+    if (closest < 1e10) {
+        float diffuse = max(dot(normal, lightDir), 0.0);
+        float ambient = 0.2;
+        color *= (ambient + diffuse * 0.8);
+    }
+    
+    return color;
+}
+
+void main() {
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outputImage);
+    
+    if (texel.x >= size.x || texel.y >= size.y)
+        return;
+    
+    // Create ray
+    vec2 uv = (vec2(texel) - vec2(size) * 0.5) / float(size.y);
+    
+    Ray ray;
+    ray.origin = camPos;
+    ray.direction = normalize(vec3(uv, -1.0));
+    
+    vec3 color = trace(ray);
+    
+    imageStore(outputImage, texel, vec4(color, 1.0));
+}

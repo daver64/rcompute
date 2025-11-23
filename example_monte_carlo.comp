@@ -1,0 +1,46 @@
+#version 430
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer Results {
+    uint hits;
+    uint total;
+};
+
+uniform uint seed_base;
+
+// Simple random number generator
+uint hash(uint x) {
+    x ^= x >> 16;
+    x *= 0x7feb352dU;
+    x ^= x >> 15;
+    x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+}
+
+float random(inout uint state) {
+    state = hash(state);
+    return float(state) / 4294967296.0;
+}
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    uint state = seed_base + gid * 12345u;
+    
+    // Monte Carlo π estimation: sample points in unit square,
+    // count how many fall inside unit circle
+    const uint SAMPLES_PER_THREAD = 1000u;
+    uint local_hits = 0u;
+    
+    for (uint i = 0u; i < SAMPLES_PER_THREAD; i++) {
+        float x = random(state);
+        float y = random(state);
+        
+        if (x * x + y * y <= 1.0)
+            local_hits++;
+    }
+    
+    // Accumulate results atomically
+    atomicAdd(hits, local_hits);
+    atomicAdd(total, SAMPLES_PER_THREAD);
+}

@@ -1,0 +1,44 @@
+#version 430
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0, rgba32f) uniform readonly image2D inputImage;
+layout(binding = 1, rgba32f) uniform writeonly image2D outputImage;
+
+uniform int horizontal;  // 1 for horizontal pass, 0 for vertical
+uniform float weights[5];
+
+void main() {
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(inputImage);
+    
+    if (texel.x >= size.x || texel.y >= size.y)
+        return;
+    
+    vec4 result = imageLoad(inputImage, texel) * weights[0];
+    
+    if (horizontal == 1) {
+        // Horizontal blur
+        for (int i = 1; i < 5; i++) {
+            ivec2 offset1 = texel + ivec2(i, 0);
+            ivec2 offset2 = texel - ivec2(i, 0);
+            
+            if (offset1.x < size.x)
+                result += imageLoad(inputImage, offset1) * weights[i];
+            if (offset2.x >= 0)
+                result += imageLoad(inputImage, offset2) * weights[i];
+        }
+    } else {
+        // Vertical blur
+        for (int i = 1; i < 5; i++) {
+            ivec2 offset1 = texel + ivec2(0, i);
+            ivec2 offset2 = texel - ivec2(0, i);
+            
+            if (offset1.y < size.y)
+                result += imageLoad(inputImage, offset1) * weights[i];
+            if (offset2.y >= 0)
+                result += imageLoad(inputImage, offset2) * weights[i];
+        }
+    }
+    
+    imageStore(outputImage, texel, result);
+}
