@@ -3,7 +3,14 @@ example
 example_advanced
 example_comprehensive
 example_new_features
+example_advanced_features
+example_texture
 test_limits
+
+# Generated output files
+*.ppm
+*.png
+*.jpg
 
 # Build directories
 build/

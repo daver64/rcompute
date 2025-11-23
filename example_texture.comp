@@ -1,0 +1,58 @@
+#version 430
+layout(local_size_x = 16, local_size_y = 16) in;
+
+// Input texture
+layout(binding = 0, rgba32f) uniform readonly image2D inputImage;
+
+// Output texture
+layout(binding = 1, rgba32f) uniform writeonly image2D outputImage;
+
+uniform float threshold;
+uniform vec3 tintColor;
+
+void main() {
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(inputImage);
+    
+    // Boundary check
+    if (texel.x >= size.x || texel.y >= size.y)
+        return;
+    
+    // Read input pixel
+    vec4 color = imageLoad(inputImage, texel);
+    
+    // Apply edge detection (simple Sobel-like filter)
+    vec4 gx = vec4(0.0);
+    vec4 gy = vec4(0.0);
+    
+    // Sample neighboring pixels
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            ivec2 offset = texel + ivec2(dx, dy);
+            if (offset.x >= 0 && offset.x < size.x && offset.y >= 0 && offset.y < size.y) {
+                vec4 pixel = imageLoad(inputImage, offset);
+                
+                // Sobel operator
+                gx += pixel * float(dx);
+                gy += pixel * float(dy);
+            }
+        }
+    }
+    
+    // Calculate gradient magnitude
+    float magnitude = length(vec2(length(gx.rgb), length(gy.rgb)));
+    
+    // Apply threshold
+    vec4 result;
+    if (magnitude > threshold) {
+        // Edge detected - apply tint
+        result = vec4(tintColor * magnitude, 1.0);
+    } else {
+        // No edge - keep original with slight desaturation
+        float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+        result = vec4(mix(vec3(gray), color.rgb, 0.3), color.a);
+    }
+    
+    // Write output
+    imageStore(outputImage, texel, result);
+}

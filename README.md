@@ -393,6 +393,7 @@ The project includes several examples demonstrating different use cases:
 - **`example_comprehensive.cpp`** - Advanced algorithms (smoothing, reduction, matrix multiplication)
 - **`example_new_features.cpp`** - Features: uniforms, timing, limits, barriers, shader defines
 - **`example_advanced_features.cpp`** - Advanced features: buffer mapping, async reads, shader hot-reload, debug mode, bounds checking
+- **`example_texture.cpp`** - 2D texture processing with edge detection filter
 
 ### Example Shaders
 
