@@ -49,3 +49,4 @@ CPackSourceConfig.cmake
 # OS
 .DS_Store
 Thumbs.db
+example_nebulabrot

@@ -59,6 +59,7 @@ The project includes extensive examples demonstrating different use cases:
 | Example | Description | Source | Shader |
 |---------|-------------|--------|--------|
 | **example_mandelbrot** | Mandelbrot fractal generation with zoom levels | [`example_mandelbrot.cpp`](example_mandelbrot.cpp) | [`example_mandelbrot.comp`](example_mandelbrot.comp) |
+| **example_nebulabrot** | Nebulabrot (Buddhabrot) density accumulation with atomics | [`example_nebulabrot.cpp`](example_nebulabrot.cpp) | [`example_nebulabrot.comp`](example_nebulabrot.comp) |
 | **example_raytracer** | Simple raytracer with animated spheres and plane | [`example_raytracer.cpp`](example_raytracer.cpp) | [`example_raytracer.comp`](example_raytracer.comp) |
 
 ### Physics & Simulation
